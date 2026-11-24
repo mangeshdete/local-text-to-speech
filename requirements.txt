@@ -1,0 +1,7 @@
+# Python 3.10, 3.11, or 3.12. Kokoro 0.9.4 does not install on 3.13 or newer.
+# The PyTorch wheel on PyPI for the 2.15 release is the CUDA 13.2 build.
+# An older NVIDIA driver needs a different torch build. See README.md.
+torch
+kokoro>=0.9.4
+soundfile
+numpy

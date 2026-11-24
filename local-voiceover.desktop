@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Local Voiceover
+Comment=Turn a script into a voiceover in the browser
+Exec=/home/mangesh-dete/Desktop/Projects/local-text-to-speech/open-gui.sh
+Path=/home/mangesh-dete/Desktop/Projects/local-text-to-speech
+Terminal=false
+Categories=Audio;AudioVideo;
+StartupNotify=true

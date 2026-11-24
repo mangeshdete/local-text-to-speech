@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local Voiceover</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c1917;
+      --muted: #57534e;
+      --line: #d6d3d1;
+      --paper: #fafaf9;
+      --card: #ffffff;
+      --accent: #1d4ed8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 18px/1.45 Georgia, "Iowan Old Style", serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    h1 { font-size: 2rem; margin: 0 0 8px; }
+    p.lead { color: var(--muted); margin: 0 0 24px; }
+    label { display: block; font: 600 0.95rem/1.3 system-ui, sans-serif; margin: 16px 0 6px; }
+    textarea, select, input[type="number"] {
+      width: 100%;
+      font: 1.05rem/1.4 system-ui, sans-serif;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--card);
+      color: var(--ink);
+    }
+    textarea { min-height: 220px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .check { display: flex; align-items: center; gap: 8px; margin-top: 18px; font: 1rem system-ui, sans-serif; }
+    button {
+      margin-top: 22px;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 16px;
+      font: 700 1.15rem system-ui, sans-serif;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    #status { margin-top: 16px; font: 1rem system-ui, sans-serif; }
+    #warning { margin-top: 10px; color: #9a3412; font: 1rem system-ui, sans-serif; }
+    audio { width: 100%; margin-top: 16px; }
+    .downloads { display: flex; gap: 16px; margin-top: 12px; font: 1rem system-ui, sans-serif; }
+    .hidden { display: none; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Local Voiceover</h1>
+    <p class="lead">Paste a script, pick a voice, and make a recording on this computer.</p>
+
+    <label for="script">Script</label>
+    <textarea id="script" placeholder="Paste the words to be spoken.">Hello, this is a test. Does it pause correctly? Yes... it does!</textarea>
+
+    <label for="voice">Voice</label>
+    <select id="voice"></select>
+
+    <div class="row">
+      <div>
+        <label for="speed">Speed <span id="speed-value">1.00</span></label>
+        <input id="speed" type="range" min="0.7" max="1.3" step="0.05" value="1">
+      </div>
+      <div>
+        <label for="pause">Pause between sentences <span id="pause-value">200</span> ms</label>
+        <input id="pause" type="range" min="0" max="800" step="50" value="200">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="target">Target length (seconds)</label>
+        <input id="target" type="number" min="1" step="0.1" value="28">
+      </div>
+      <label class="check"><input id="fit" type="checkbox"> Fit the recording to that length</label>
+    </div>
+    <label class="check"><input id="mp3" type="checkbox"> Also save an MP3</label>
+
+    <button id="go" type="button">Make voiceover</button>
+    <p id="status"></p>
+    <p id="warning"></p>
+    <audio id="player" class="hidden" controls></audio>
+    <div id="downloads" class="downloads hidden"></div>
+  </main>
+  <script>
+    const voice = document.querySelector("#voice");
+    const speed = document.querySelector("#speed");
+    const pause = document.querySelector("#pause");
+    const status = document.querySelector("#status");
+    const warning = document.querySelector("#warning");
+    const player = document.querySelector("#player");
+    const downloads = document.querySelector("#downloads");
+    const button = document.querySelector("#go");
+
+    speed.addEventListener("input", () => {
+      document.querySelector("#speed-value").textContent = Number(speed.value).toFixed(2);
+    });
+    pause.addEventListener("input", () => {
+      document.querySelector("#pause-value").textContent = pause.value;
+    });
+
+    fetch("/voices").then((response) => response.json()).then((data) => {
+      let kind = "";
+      for (const item of data.voices) {
+        if (item.kind !== kind) {
+          kind = item.kind;
+          const group = document.createElement("optgroup");
+          group.label = kind;
+          voice.appendChild(group);
+        }
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = item.name;
+        if (item.id === "af_heart") option.selected = true;
+        voice.lastElementChild.appendChild(option);
+      }
+    });
+
+    function link(name, label) {
+      const anchor = document.createElement("a");
+      anchor.href = "/files/" + encodeURIComponent(name);
+      anchor.download = name;
+      anchor.textContent = label;
+      return anchor;
+    }
+
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      warning.textContent = "";
+      downloads.classList.add("hidden");
+      downloads.replaceChildren();
+      player.classList.add("hidden");
+      status.textContent = "Making the voiceover. The first time also loads the voice, so give it a moment.";
+      try {
+        const response = await fetch("/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: document.querySelector("#script").value,
+            voice: voice.value,
+            speed: Number(speed.value),
+            pause: Number(pause.value),
+            target: document.querySelector("#target").value,
+            fit: document.querySelector("#fit").checked,
+            mp3: document.querySelector("#mp3").checked
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Something went wrong.");
+        const length = result.target == null
+          ? result.duration + " seconds."
+          : result.duration + " seconds (target " + result.target + ").";
+        status.textContent = "Ready. " + length + " Made on the " + result.device + ".";
+        warning.textContent = result.warning || "";
+        player.src = "/files/" + encodeURIComponent(result.wav);
+        player.classList.remove("hidden");
+        downloads.classList.remove("hidden");
+        downloads.append(link(result.wav, "Download WAV"), link(result.srt, "Download subtitles"));
+        if (result.mp3) downloads.append(link(result.mp3, "Download MP3"));
+        player.play().catch(() => {});
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
